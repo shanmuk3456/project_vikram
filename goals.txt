@@ -1,0 +1,975 @@
+I went through everything you posted and I also remembered the evolution of this project over the last few days (multiple models, controller/coder separation, JSON experiments, testing GPT-OSS, etc.).
+
+My conclusion is this:
+
+> **Do not add new features yet.**
+>
+> Your project has reached the point where **the architecture needs to mature** before adding memory, agents, ChromaDB, LangChain, etc.
+
+Right now, your project is around **Version 0.3**.
+We need to turn it into **Version 1.0**.
+
+---
+
+# Current Architecture
+
+```
+User
+   │
+   ▼
+Gemma 2B (Controller)
+   │
+   ▼
+JSON
+   │
+   ▼
+main.py
+   │
+   ├── create_file
+   ├── edit_file
+   ├── create_react_app
+   ├── list_files
+   └── reply_generation
+           │
+           ▼
+Qwen3 (Chat)
+
+DeepSeek Coder
+      │
+      ▼
+Generated Code
+```
+
+It works.
+
+But it isn't scalable.
+
+---
+
+# Phase 1 — Fix the Foundation (Highest Priority)
+
+These are things you **must** do before adding any AI features.
+
+---
+
+## 1. Project Structure
+
+Instead of
+
+```
+main.py
+prompt.py
+tools.py
+llm.py
+```
+
+move toward
+
+```
+vikram/
+
+main.py
+
+core/
+    controller.py
+    coder.py
+    chat.py
+    parser.py
+
+models/
+    llm.py
+
+tools/
+    file_tools.py
+    project_tools.py
+
+prompts/
+    controller_prompt.py
+    coder_prompt.py
+
+utils/
+    cleaner.py
+    logger.py
+    config.py
+```
+
+Why?
+
+Because in two months you'll probably have 25+ functions. Keeping everything in four files becomes difficult to maintain.
+
+---
+
+## 2. Logging
+
+Right now you don't know what happened internally.
+
+Instead of
+
+```
+User
+↓
+
+Result
+```
+
+You should have
+
+```
+User
+
+↓
+
+Controller Prompt
+
+↓
+
+Controller Response
+
+↓
+
+Parsed JSON
+
+↓
+
+Selected Action
+
+↓
+
+Coder Prompt
+
+↓
+
+Coder Response
+
+↓
+
+Tool
+
+↓
+
+Result
+```
+
+Save this to a log file.
+
+Later debugging becomes very easy.
+
+---
+
+## 3. Error Handling
+
+Currently
+
+```
+JSON parsing failed
+```
+
+and then everything continues.
+
+Instead:
+
+```
+LLM Failure
+
+↓
+
+Retry
+
+↓
+
+Fallback
+
+↓
+
+Error
+```
+
+Example
+
+```
+Try 1
+
+↓
+
+Invalid JSON
+
+↓
+
+Ask controller again
+
+↓
+
+Still invalid?
+
+↓
+
+Use General Chat
+
+↓
+
+Inform user
+```
+
+---
+
+## 4. Ollama Availability
+
+This
+
+```
+Connection refused
+```
+
+is happening because
+
+```
+Ollama isn't running
+```
+
+Instead of crashing
+
+```
+requests.post(...)
+```
+
+first check
+
+```
+http://localhost:11434/api/tags
+```
+
+If unavailable
+
+```
+Start Ollama
+```
+
+or
+
+```
+Please run
+
+ollama serve
+```
+
+This should happen automatically.
+
+---
+
+# Phase 2 — Better Controller
+
+Gemma 2B is okay.
+
+But your controller should not only decide
+
+```
+create file
+```
+
+It should also decide
+
+```
+priority
+
+complexity
+
+language
+
+project type
+```
+
+Example
+
+User:
+
+```
+Create a portfolio website
+```
+
+Instead of
+
+```
+create_file
+```
+
+Return
+
+```json
+{
+  "action":"multi_file_project",
+
+  "framework":"html",
+
+  "files":[
+      "index.html",
+      "style.css",
+      "script.js"
+  ]
+}
+```
+
+See how much richer that is?
+
+---
+
+# Phase 3 — Multi-file Projects
+
+This is the next huge upgrade.
+
+Instead of
+
+```
+create html
+```
+
+support
+
+```
+create calculator website
+```
+
+Controller
+
+↓
+
+```
+multi_file_project
+```
+
+↓
+
+Generate
+
+```
+index.html
+
+style.css
+
+script.js
+
+README.md
+```
+
+This is where your assistant starts becoming similar to Cursor.
+
+---
+
+# Phase 4 — Workspace Awareness
+
+Right now
+
+```
+edit index.html
+```
+
+reads only
+
+```
+index.html
+```
+
+Later it should understand
+
+```
+Current Folder
+
+↓
+
+All Files
+
+↓
+
+Relationships
+
+↓
+
+Dependencies
+```
+
+Example
+
+```
+style.css
+
+↓
+
+index.html imports it
+
+↓
+
+script.js references button id
+```
+
+Now edits become intelligent.
+
+---
+
+# Phase 5 — Project Context
+
+Suppose folder contains
+
+```
+package.json
+
+vite.config.js
+
+src/
+
+public/
+```
+
+Your assistant should immediately know
+
+```
+This is Vite
+```
+
+without asking.
+
+---
+
+# Phase 6 — Memory
+
+Not ChromaDB yet.
+
+Start simple.
+
+Create
+
+```
+memory.json
+```
+
+Store
+
+```
+Preferred language
+
+Preferred framework
+
+Previous projects
+
+Coding style
+```
+
+Example
+
+```
+{
+ "framework":"react",
+
+ "language":"python",
+
+ "indent":"4 spaces"
+}
+```
+
+That's enough initially.
+
+---
+
+# Phase 7 — Agent
+
+Only after everything above.
+
+Agent means
+
+```
+Think
+
+↓
+
+Plan
+
+↓
+
+Execute
+
+↓
+
+Verify
+
+↓
+
+Repeat
+```
+
+Not just
+
+```
+Generate Code
+```
+
+---
+
+# Phase 8 — Search
+
+Currently
+
+```
+Edit header
+```
+
+reads one file.
+
+Eventually
+
+```
+Search entire project
+
+↓
+
+Find header
+
+↓
+
+Update everywhere
+```
+
+---
+
+# Phase 9 — Terminal Tools
+
+Eventually your AI should be able to
+
+```
+npm install
+
+git init
+
+npm run dev
+
+python main.py
+
+pytest
+
+```
+
+through Python.
+
+---
+
+# Phase 10 — Real IDE Assistant
+
+Eventually
+
+```
+User
+
+↓
+
+AI
+
+↓
+
+Reads project
+
+↓
+
+Plans
+
+↓
+
+Generates
+
+↓
+
+Edits
+
+↓
+
+Runs
+
+↓
+
+Fixes errors
+
+↓
+
+Repeats
+```
+
+This is basically what Cursor, Windsurf, Claude Code, etc. do.
+
+---
+
+# Things I Would Change Immediately
+
+## Remove
+
+Your parser currently does
+
+```python
+match = re.search(r'\{.*\}', response, re.DOTALL)
+```
+
+This is greedy.
+
+Instead use a more reliable extraction approach or make the controller output cleaner. A greedy regex can accidentally consume extra braces if the model includes additional JSON-like text.
+
+---
+
+## Add Timeout
+
+```python
+requests.post(..., timeout=120)
+```
+
+---
+
+## Check HTTP Status
+
+Instead of
+
+```python
+response.json()
+```
+
+first
+
+```python
+response.raise_for_status()
+```
+
+---
+
+## Validate JSON
+
+After parsing
+
+verify
+
+```
+action exists
+
+filename exists
+```
+
+Don't assume they're always there.
+
+---
+
+## Better Cleaner
+
+Support
+
+````
+```python
+
+```cpp
+
+```ts
+
+```tsx
+
+```jsx
+
+```css
+````
+
+not only HTML and JS.
+
+---
+
+# The Biggest Feature Missing
+
+You currently have:
+
+```
+User
+
+↓
+
+LLM
+
+↓
+
+Tool
+```
+
+You're missing a **planner**.
+
+A planner would think like this:
+
+```
+User:
+Create a portfolio website
+
+↓
+
+Need 4 files
+
+↓
+
+Need CSS
+
+↓
+
+Need JS
+
+↓
+
+Need assets folder
+
+↓
+
+Generate each one
+
+↓
+
+Save
+
+↓
+
+Return success
+```
+
+That's the biggest jump in capability after stabilizing the current code.
+
+---
+
+## My Recommendation
+
+If I were mentoring this project, I would **not** add ChromaDB, LangChain, or autonomous agents next.
+
+I would prioritize them in this order:
+
+1. Stabilize the current pipeline (logging, retries, validation, Ollama checks).
+2. Support **multi-file project generation**.
+3. Make the assistant **workspace-aware** (understand existing files and their relationships).
+4. Add a **planner** that can break a request into multiple steps.
+5. Only then add persistent memory and more advanced agent behavior.
+
+At that point, you'll have a strong foundation that you can continue building without constantly fighting architectural problems. That foundation is what will make later features much easier to add.
+
+
+Version 0.3 — Refactor (2–3 hours)
+
+Don't add features.
+
+Only improve architecture.
+
+Current
+↓
+
+Organized Project
+
+↓
+
+Cleaner Imports
+
+↓
+
+Config
+
+↓
+
+Logger
+
+↓
+
+Parser
+Version 0.4 — Workspace Manager (1 day)
+
+This is the first "real" feature.
+
+We'll create
+
+workspace/
+
+    manager.py
+
+Example
+
+workspace/
+
+    manager.py
+
+projects/
+
+    current_workspace.json
+
+When the user says
+
+List project
+
+it scans
+
+HTML
+
+CSS
+
+JS
+
+Python
+
+React
+
+Node
+
+
+and stores
+
+{
+  "project_name": "myapp",
+
+  "files": [
+
+      "index.html",
+
+      "style.css",
+
+      "script.js"
+
+  ]
+}
+
+No AI yet.
+
+Pure Python.
+
+Version 0.5 — Project Awareness
+
+Now AI starts using Workspace.
+
+Instead of
+
+Edit index.html
+
+it does
+
+Workspace
+
+↓
+
+Load HTML
+
+↓
+
+Load CSS
+
+↓
+
+Load JS
+
+↓
+
+Generate
+
+↓
+
+Edit
+Version 0.6 — Multi-file Generator
+
+Instead of
+
+create html
+
+AI returns
+
+{
+ "action":"multi_file_project",
+
+ "files":[
+
+   "index.html",
+
+   "style.css",
+
+   "script.js"
+
+ ]
+}
+
+Then generates every file.
+
+Version 0.7 — Planner
+
+The biggest upgrade.
+
+Current
+
+User
+
+↓
+
+Controller
+
+↓
+
+Coder
+
+Future
+
+User
+
+↓
+
+Planner
+
+↓
+
+Controller
+
+↓
+
+Coder
+
+↓
+
+Tools
+
+Planner decides
+
+Need 3 files
+
+Need React
+
+Need CSS
+
+Need README
+Version 0.8 — Terminal
+npm install
+
+npm run dev
+
+python main.py
+
+git init
+
+Version 0.9 — Validator
+
+AI generates code.
+
+Validator checks
+
+Syntax
+
+Imports
+
+JSON
+
+File exists
+
+Dependencies
+Version 1.0
+
+Stable Coding Assistant.
+
+Only after this
+
+↓
+
+Memory
+
+↓
+
+Agents
+
+↓
+
+Internet
+
+↓
+
+Vector DB
